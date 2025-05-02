@@ -1,3 +1,29 @@
 Date,Income,Rent,Groceries,Entertainment,EMI,Prepayment,Principal,Interest
 2025-03-01,3000,1000,400,300,439,0,10000,41.67
 2025-03-02,3000,1000,400,200,439,100,9602.67,40.00
+
+
+
+🌟 Had an incredible experience at the Google Solutions Hackathon 2025 Bootcamp held on March 17 at St. Joseph Institute of Technology, Chennai, as part of the Google Solutions Challenge Hackathon 2025 timeline! 🌟
+
+
+
+The event began with an introduction to Nephele, a robot designed to assist with teaching and communication. We gained valuable insights on AI market trends and practical tips for selecting problem statements that align with real-world issues.
+
+
+
+I was inspired by a presentation on wearable technology supporting the health of pregnant women in rural areas and an innovative hardware solution developed for navigating visually impaired individuals.
+
+
+
+A session on the Gemini API stood out, where we learned about how language models work and explored a fascinating project that optimizes cloud processes by converting queries into terminal commands.
+
+
+
+Excited to see how the challenge unfolds and looking forward to contributing to impactful solutions along the way! 🚀
+
+
+
+
+1.Overburdened Teachers and the Need for Personalized Feedback
+2.GenAI-Powered Financial Assistant for Better Investing Decisions
