@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Habits Chatbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col">
+    <div class="container mx-auto p-4 flex-grow">
+        <h1 class="text-2xl font-bold mb-4 text-center">Financial Habits Chatbot</h1>
+        <div id="chat-container" class="bg-gray-800 rounded-lg p-4 h-[70vh] overflow-y-auto mb-4 flex flex-col">
+            <div id="chat-messages" class="flex-grow"></div>
+        </div>
+        <div class="flex">
+            <input id="user-input" type="text" class="flex-grow bg-gray-700 text-gray-100 rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ask about your financial habits..." autocomplete="off">
+            <button id="send-button" class="bg-blue-600 hover:bg-blue-700 text-white rounded-r-lg p-2">Send</button>
+        </div>
+    </div>
+    <script>
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+
+        function addMessage(content, isUser) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `p-2 my-1 rounded-lg max-w-[80%] ${isUser ? 'bg-blue-600 ml-auto text-right' : 'bg-gray-700 mr-auto'}`;
+            messageDiv.textContent = content;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function sendQuery() {
+            const query = userInput.value.trim();
+            if (!query) return;
+
+            addMessage(query, true);
+            userInput.value = '';
+
+            if (query.toLowerCase() === 'exit' || query.toLowerCase() === 'quit' || query.toLowerCase() === 'bye') {
+                addMessage('Goodbye!', false);
+                userInput.disabled = true;
+                sendButton.disabled = true;
+                return;
+            }
+
+            try {
+                const response = await fetch('/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+                const data = await response.json();
+                addMessage(data.response, false);
+            } catch (error) {
+                addMessage(`Error: ${error.message}`, false);
+            }
+        }
+
+        sendButton.addEventListener('click', sendQuery);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendQuery();
+        });
+    </script>
+</body>
+</html>

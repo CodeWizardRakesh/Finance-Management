@@ -1,7 +1,7 @@
 import os
 import google.generativeai as genai
 import warnings
-import sys
+from flask import Flask, render_template, request, jsonify
 from langchain.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.prompts import ChatPromptTemplate
@@ -11,7 +11,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="langchain")
 
 # Configure Gemini API
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")  # Ensure this is set in your environment
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY environment variable is not set.")
 genai.configure(api_key=GOOGLE_API_KEY)
@@ -33,16 +33,22 @@ Answer the question based on the above context: {query}
 # Initialize Gemini model
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# Start chatbot loop
-while True:
-    query_text = input("You: ")  # Get user input dynamically
-    
-    # Exit condition
-    if query_text.lower() in ["exit", "quit", "bye"]:
-        print("Chatbot: Goodbye!")
-        break
+# Flask app
+app = Flask(__name__)
 
-    # Retrieve top 3 relevant chunks (use similarity_search to avoid relevance score warning)
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/query', methods=['POST'])
+def process_query():
+    data = request.get_json()
+    query_text = data.get('query', '')
+
+    if query_text.lower() in ['exit', 'quit', 'bye']:
+        return jsonify({'response': 'Goodbye!'})
+
+    # Retrieve top 3 relevant chunks
     result = db.similarity_search(query_text, k=3)
 
     # Create context from retrieved chunks
@@ -55,6 +61,9 @@ while True:
     # Generate response using Gemini API
     try:
         response = model.generate_content(prompt[0].content)
-        print("Chatbot:", response.text)
+        return jsonify({'response': response.text})
     except Exception as e:
-        print(f"Error generating response with Gemini: {str(e)}")
+        return jsonify({'response': f"Error generating response with Gemini: {str(e)}"})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
