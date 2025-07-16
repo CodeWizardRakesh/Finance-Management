@@ -3,63 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financial Habits Chatbot</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Personal Finance Advisor</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f0f0f0; }
+        #chat-container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 10px; }
+        #chat-box { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: scroll; }
+        #input-box { width: 100%; padding: 10px; margin-top: 10px; border-radius: 5px; }
+        #send-button { padding: 10px 20px; margin-top: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        #send-button:hover { background: #0056b3; }
+        pre { background: #f8f8f8; padding: 10px; border-radius: 5px; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col">
-    <div class="container mx-auto p-4 flex-grow">
-        <h1 class="text-2xl font-bold mb-4 text-center">Financial Habits Chatbot</h1>
-        <div id="chat-container" class="bg-gray-800 rounded-lg p-4 h-[70vh] overflow-y-auto mb-4 flex flex-col">
-            <div id="chat-messages" class="flex-grow"></div>
-        </div>
-        <div class="flex">
-            <input id="user-input" type="text" class="flex-grow bg-gray-700 text-gray-100 rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ask about your financial habits..." autocomplete="off">
-            <button id="send-button" class="bg-blue-600 hover:bg-blue-700 text-white rounded-r-lg p-2">Send</button>
-        </div>
+<body>
+    <div id="chat-container">
+        <h1>Personal Finance Advisor</h1>
+        <div id="chat-box"></div>
+        <input type="text" id="input-box" placeholder="Ask about budgeting, investing, or savings...">
+        <button id="send-button" onclick="sendMessage()">Send</button>
     </div>
     <script>
-        const chatMessages = document.getElementById('chat-messages');
-        const userInput = document.getElementById('user-input');
-        const sendButton = document.getElementById('send-button');
+        async function sendMessage() {
+            const inputBox = document.getElementById("input-box");
+            const chatBox = document.getElementById("chat-box");
+            const message = inputBox.value.trim();
+            if (!message) return;
 
-        function addMessage(content, isUser) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `p-2 my-1 rounded-lg max-w-[80%] ${isUser ? 'bg-blue-600 ml-auto text-right' : 'bg-gray-700 mr-auto'}`;
-            messageDiv.textContent = content;
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
+            // Display user message
+            chatBox.innerHTML += `<p><b>You:</b> ${message}</p>`;
+            inputBox.value = "";
 
-        async function sendQuery() {
-            const query = userInput.value.trim();
-            if (!query) return;
-
-            addMessage(query, true);
-            userInput.value = '';
-
-            if (query.toLowerCase() === 'exit' || query.toLowerCase() === 'quit' || query.toLowerCase() === 'bye') {
-                addMessage('Goodbye!', false);
-                userInput.disabled = true;
-                sendButton.disabled = true;
-                return;
-            }
-
+            // Send request to backend
             try {
-                const response = await fetch('/query', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query })
+                const response = await fetch("/query", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query: message })
                 });
                 const data = await response.json();
-                addMessage(data.response, false);
+
+                // Display Manager LLM response
+                if (data.manager_response.error) {
+                    chatBox.innerHTML += `<p><b>Manager LLM:</b> Error: ${data.manager_response.error}</p>`;
+                    if (data.manager_response.raw) {
+                        chatBox.innerHTML += `<pre>Raw: ${data.manager_response.raw}</pre>`;
+                    }
+                } else {
+                    chatBox.innerHTML += `<p><b>Manager LLM:</b></p><pre>${JSON.stringify(data.manager_response, null, 2)}</pre>`;
+                }
+
+                // Display Advisor LLM response
+                if (data.advisor_response && typeof data.advisor_response === 'string') {
+                    const htmlResponse = marked.parse(data.advisor_response);
+                    chatBox.innerHTML += `<p><b>Advisor:</b></p><div>${htmlResponse}</div>`;
+                    if (data.web_links && data.web_links.trim()) {
+                        const linksHtml = marked.parse(`**Web Searches:**\n${data.web_links}`);
+                        chatBox.innerHTML += `<div>${linksHtml}</div>`;
+                    }
+                } else if (data.advisor_response && data.advisor_response.error) {
+                    chatBox.innerHTML += `<p><b>Advisor:</b> Error: ${data.advisor_response.error}</p>`;
+                } else {
+                    chatBox.innerHTML += `<p><b>Advisor:</b> No response generated.</p>`;
+                }
+
+                chatBox.scrollTop = chatBox.scrollHeight;
             } catch (error) {
-                addMessage(`Error: ${error.message}`, false);
+                chatBox.innerHTML += `<p><b>Advisor:</b> Error: ${error.message}</p>`;
+                chatBox.scrollTop = chatBox.scrollHeight;
             }
         }
 
-        sendButton.addEventListener('click', sendQuery);
-        userInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendQuery();
+        // Allow sending message with Enter key
+        document.getElementById("input-box").addEventListener("keypress", (e) => {
+            if (e.key === "Enter") sendMessage();
         });
     </script>
 </body>
