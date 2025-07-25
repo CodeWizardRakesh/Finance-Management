@@ -1,30 +1,16 @@
+from dotenv import load_dotenv
 import os
 import google.generativeai as genai
 import warnings
 import json
+import requests 
 from flask import Flask, render_template, request, jsonify
 from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.prompts import ChatPromptTemplate
-import requests
 
-
-def perform_web_search(query, api_key, num_results=3):
-    try:
-        params = {
-            "engine": "google",
-            "q": query,
-            "api_key": api_key,
-            "num": num_results
-        }
-        res = requests.get("https://serpapi.com/search", params=params)
-        results = res.json().get("organic_results", [])
-        if not results:
-            return "No search results found."
-
-        return "\n".join([f"- [{r['title']}]({r['link']})" for r in results])
-    except Exception as e:
-        return f"Error during web search: {str(e)}"
+#to load the environment variables
+load_dotenv()
 
 # Suppress LangChain and Chroma warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
@@ -43,27 +29,46 @@ em_func = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-
 # Load Chroma database
 db = Chroma(persist_directory=CHROMA_PATH, embedding_function=em_func)
 
+def perform_web_search(query, api_key, num_results=3):
+    try:
+        params = {
+            "engine": "google",
+            "q": query,
+            "api_key": api_key,
+            "num": num_results
+        }
+        res = requests.get("https://serpapi.com/search", params=params)
+        results = res.json().get("organic_results", [])
+        if not results:
+            return "No search results found."
+        return "\n".join([f"- [{r['title']}]({r['link']})" for r in results])
+    except Exception as e:
+        return f"Error during web search: {str(e)}"
+
 # Manager LLM prompt template
 MANAGER_PROMPT_TEMPLATE = """
-You are a Manager LLM for a Personal Finance Advisor. Your task is to analyze the user query and provided context to determine if a web search is needed and return a JSON object with the following fields:
+You are a Manager LLM for a Personal Finance Advisor. Your task is to analyze the user query to determine if a database search (RAG) or web search is needed, and return a JSON object with the following fields:
+- "RAG_needed": "yes" if the query involves financial topics (e.g., budgeting, savings, investments), otherwise "no".
 - "websearch_needed": "yes" if the query requires real-time or external data (e.g., current stock prices, recent financial news), otherwise "no".
-- "user_query": the original user query.
-- "context": the provided context from the database.
+- "prompt": the original user query.
+- "context": leave empty for now (to be populated later if RAG_needed is "yes").
 
 **Input**:
 User Query: {query}
-Context: {context}
 
 **Instructions**:
 - Output only a valid JSON object, no additional text.
-- Set "websearch_needed" to "yes" for queries about real-time data, recent events, or information likely missing from the context.
-- Include the full user query and context in the JSON.
+- Set "RAG_needed" to "yes" for queries about budgeting, savings, investments, or financial habits.
+- Set "websearch_needed" to "yes" for queries about real-time data or recent events.
+- Include the full user query as "prompt".
+- Set "context" to an empty string.
 
 **Output Format**:
 {{
+    "RAG_needed": "yes/no",
     "websearch_needed": "yes/no",
-    "user_query": "{query}",
-    "context": "{context}"
+    "prompt": "{query}",
+    "context": ""
 }}
 """
 
@@ -75,18 +80,19 @@ You are an Advisor LLM for a Personal Finance Advisor. Your task is to take a JS
 {manager_json}
 
 **Instructions**:
-- Use the "user_query" and "context" from the JSON to answer the query.
-- If "websearch_needed" is "yes", note that real-time data is unavailable and rely on the context or general financial knowledge.
+- Use the "prompt" and "context" from the JSON to answer the query.
+- If "websearch_needed" is "yes", note that real-time data is included in the context as web search links, or acknowledge if unavailable.
+- If "RAG_needed" is "no", respond based on general financial knowledge or acknowledge non-financial queries.
 - Provide a concise, user-friendly response addressing the query.
 - Include a **Suggestion** section with actionable financial advice tailored to the query and context.
 - If the context is empty or irrelevant, use general financial knowledge.
-- Output only the conversational response, no JSON.
+- Output only the conversational response, no JSON, formatted with markdown for emphasis (e.g., **Suggestion**).
 
-**Example**:
-- Input: {{"websearch_needed": "yes", "user_query": "What is my money flow pattern in March?", "context": "April data: Income $5,200, Expenses $3,800..."}}
-- Output: I don't have March data, but based on your April patterns, your income was $5,200 with expenses of $3,800 (housing, utilities, dining out). You saved $1,000 and invested $400. **Suggestion**: Track March expenses in a budgeting app like YNAB to identify patterns.
-
-- And if any wesearch done pleese display the websearch links to the user as well
+**Example****:
+- Input: {{"RAG_needed": "yes", "websearch_needed": "yes", "prompt": "What is my money flow pattern in March?", "context": "April data: Income $5,200, Expenses $3,800...\n\n---\n\n**Web Search Results**:\n- [Finance Site](https://example.com)"}}
+- Output: I don't have March 2025 data, but based on your April 2025 patterns, your income was $5,200 with expenses of $3,800 (housing, utilities, dining out). You saved $1,000 and invested $400. Check the web search results for more insights. **Suggestion**: Track March expenses in a budgeting app like YNAB to identify patterns.
+- Input: {{"RAG_needed": "no", "websearch_needed": "no", "prompt": "Hi", "context": ""}}
+- Output: Hello! I'm here to help with your financial questions. **Suggestion**: Ask about budgeting, savings, or investments to get personalized advice!
 """
 
 # Initialize Gemini model
@@ -108,15 +114,9 @@ def process_query():
     if query_text.lower() in ['exit', 'quit', 'bye']:
         return jsonify({'response': 'Goodbye!'})
 
-    # Retrieve top 3 relevant chunks from Chroma
-    result = db.similarity_search(query_text, k=3)
-
-    # Create context from retrieved chunks
-    context_text = "\n\n---\n\n".join([doc.page_content for doc in result])
-
-    # Format prompt for Manager LLM
+    # Format prompt for Manager LLM (no context yet)
     manager_prompt_template = ChatPromptTemplate.from_template(MANAGER_PROMPT_TEMPLATE)
-    manager_prompt = manager_prompt_template.format_messages(context=context_text, query=query_text)
+    manager_prompt = manager_prompt_template.format_messages(query=query_text)
 
     # Generate JSON response from Manager LLM
     try:
@@ -132,48 +132,53 @@ def process_query():
 
         # Parse Manager LLM JSON
         try:
-            # Parse Manager LLM JSON
             manager_json = json.loads(cleaned_text)
 
+            # Perform RAG if needed
+            if manager_json.get("RAG_needed") == "yes":
+                result = db.similarity_search(query_text, k=3)
+                manager_json["context"] = "\n\n---\n\n".join([doc.page_content for doc in result])
+
             # Perform web search if needed
-            
             if manager_json.get("websearch_needed") == "yes":
                 serpapi_key = os.environ.get("SERPAPI_API_KEY")
                 if not serpapi_key:
-                    raise ValueError("SERPAPI_API_KEY is not set in environment.")
+                    manager_json["context"] += "\n\n---\n\n**Web Search Results**: SERPAPI_API_KEY not set."
+                else:
+                    search_links_md = perform_web_search(manager_json["prompt"], serpapi_key)
+                    manager_json["context"] += "\n\n---\n\n**Web Search Results**:\n" + search_links_md
 
-                search_links_md = perform_web_search(manager_json["user_query"], serpapi_key)
-                manager_json["context"] += "\n\n---\n\n**Web Search Results:**\n" + search_links_md
+            # Format prompt for Advisor LLM
+            advisor_prompt_template = ChatPromptTemplate.from_template(ADVISOR_PROMPT_TEMPLATE)
+            advisor_prompt = advisor_prompt_template.format_messages(manager_json=json.dumps(manager_json))
+
+            # Generate response from Advisor LLM
+            try:
+                advisor_response = model.generate_content(advisor_prompt[0].content)
+                return jsonify({
+                    'manager_response': manager_json,
+                    'advisor_response': advisor_response.text,
+                    'web_links': search_links_md
+                })
+            except Exception as e:
+                return jsonify({
+                    'manager_response': manager_json,
+                    'advisor_response': {'error': f"Error generating response with Advisor LLM: {str(e)}"},
+                    'web_links': search_links_md
+                })
 
         except json.JSONDecodeError:
             return jsonify({
-    'manager_response': manager_json,
-    'advisor_response': advisor_response.text,
-    'web_links': search_links_md
-})
-
-        # Format prompt for Advisor LLM
-        advisor_prompt_template = ChatPromptTemplate.from_template(ADVISOR_PROMPT_TEMPLATE)
-        advisor_prompt = advisor_prompt_template.format_messages(manager_json=json.dumps(manager_json))
-
-        # Generate response from Advisor LLM
-        try:
-            advisor_response = model.generate_content(advisor_prompt[0].content)
-            return jsonify({
-                'manager_response': manager_json,
-                'advisor_response': advisor_response.text,
-                'web_links': search_links_md  # ✅ include web links here
-            })
-        except Exception as e:
-            return jsonify({
-                'manager_response': manager_json,
-                'advisor_response': {'error': f"Error generating response with Advisor LLM: {str(e)}"}
+                'manager_response': {'error': 'Invalid JSON from Manager LLM', 'raw': cleaned_text},
+                'advisor_response': None,
+                'web_links': ""
             })
 
     except Exception as e:
         return jsonify({
             'manager_response': {'error': f"Error generating response with Manager LLM: {str(e)}"},
-            'advisor_response': None
+            'advisor_response': None,
+            'web_links': ""
         })
 
 if __name__ == '__main__':

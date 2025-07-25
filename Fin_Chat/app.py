@@ -31,7 +31,7 @@ Answer the question based on the above context: {query}
 """
 
 # Initialize Gemini model
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-2.5-pro')
 
 # Flask app
 app = Flask(__name__)

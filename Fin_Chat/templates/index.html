@@ -3,81 +3,199 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Personal Finance Advisor</title>
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <title>AI Financial Advisor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f0f0f0; }
-        #chat-container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 10px; }
-        #chat-box { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: scroll; }
-        #input-box { width: 100%; padding: 10px; margin-top: 10px; border-radius: 5px; }
-        #send-button { padding: 10px 20px; margin-top: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        #send-button:hover { background: #0056b3; }
-        pre { background: #f8f8f8; padding: 10px; border-radius: 5px; }
+        html, body {
+            height: 100%;
+            overflow: hidden; /* Prevent body scroll */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar for a cleaner look */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #111827; /* A dark gray track */
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #4B5563; /* A lighter gray thumb */
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #6B7280;
+        }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
-<body>
-    <div id="chat-container">
-        <h1>Personal Finance Advisor</h1>
-        <div id="chat-box"></div>
-        <input type="text" id="input-box" placeholder="Ask about budgeting, investing, or savings...">
-        <button id="send-button" onclick="sendMessage()">Send</button>
+<body class="bg-black text-white h-screen flex flex-col">
+
+    <header class="py-4 px-6 md:px-8 border-b border-gray-800 flex-shrink-0">
+        <h1 class="text-xl md:text-2xl font-bold">AI Financial Advisor</h1>
+    </header>
+
+    <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 p-6 md:p-8 min-h-0">
+        
+        <div class="md:col-span-2 flex flex-col h-full min-h-0">
+            <main id="chat-window" class="flex-1 p-4 bg-gray-900/50 rounded-t-lg overflow-y-auto custom-scrollbar">
+                <div class="space-y-6">
+                    <div class="flex justify-start">
+                        <div class="max-w-lg px-4 py-3 rounded-lg rounded-bl-none bg-gray-900">
+                            <p class="text-sm">Hello! How can I help you with your finances today?</p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <footer class="p-4 bg-gray-900/50 rounded-b-lg">
+                <form id="chat-form" class="flex items-center space-x-4">
+                    <input 
+                        type="text" 
+                        id="message-input"
+                        placeholder="Ask about budgeting, investments..." 
+                        class="flex-1 w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 transition-shadow"
+                        autocomplete="off">
+                    <button 
+                        type="submit"
+                        class="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        Send
+                    </button>
+                </form>
+            </footer>
+        </div>
+
+        <aside id="web-results-panel" class="md:col-span-1 bg-gray-900/50 rounded-lg p-6 flex flex-col h-full min-h-0">
+             <h2 class="text-lg font-semibold border-b border-gray-700 pb-3 mb-4">Web Search Results</h2>
+             <div id="links-container" class="flex-1 overflow-y-auto custom-scrollbar space-y-3">
+                <p class="text-gray-400 text-sm">Web search results will appear here when needed.</p>
+             </div>
+        </aside>
+
     </div>
+
     <script>
-        async function sendMessage() {
-            const inputBox = document.getElementById("input-box");
-            const chatBox = document.getElementById("chat-box");
-            const message = inputBox.value.trim();
-            if (!message) return;
+        const chatWindow = document.getElementById('chat-window');
+        const chatForm = document.getElementById('chat-form');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = chatForm.querySelector('button');
+        const linksContainer = document.getElementById('links-container');
 
-            // Display user message
-            chatBox.innerHTML += `<p><b>You:</b> ${message}</p>`;
-            inputBox.value = "";
-
-            // Send request to backend
-            try {
-                const response = await fetch("/query", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ query: message })
-                });
-                const data = await response.json();
-
-                // Display Manager LLM response
-                if (data.manager_response.error) {
-                    chatBox.innerHTML += `<p><b>Manager LLM:</b> Error: ${data.manager_response.error}</p>`;
-                    if (data.manager_response.raw) {
-                        chatBox.innerHTML += `<pre>Raw: ${data.manager_response.raw}</pre>`;
-                    }
-                } else {
-                    chatBox.innerHTML += `<p><b>Manager LLM:</b></p><pre>${JSON.stringify(data.manager_response, null, 2)}</pre>`;
-                }
-
-                // Display Advisor LLM response
-                if (data.advisor_response && typeof data.advisor_response === 'string') {
-                    const htmlResponse = marked.parse(data.advisor_response);
-                    chatBox.innerHTML += `<p><b>Advisor:</b></p><div>${htmlResponse}</div>`;
-                    if (data.web_links && data.web_links.trim()) {
-                        const linksHtml = marked.parse(`**Web Searches:**\n${data.web_links}`);
-                        chatBox.innerHTML += `<div>${linksHtml}</div>`;
-                    }
-                } else if (data.advisor_response && data.advisor_response.error) {
-                    chatBox.innerHTML += `<p><b>Advisor:</b> Error: ${data.advisor_response.error}</p>`;
-                } else {
-                    chatBox.innerHTML += `<p><b>Advisor:</b> No response generated.</p>`;
-                }
-
-                chatBox.scrollTop = chatBox.scrollHeight;
-            } catch (error) {
-                chatBox.innerHTML += `<p><b>Advisor:</b> Error: ${error.message}</p>`;
-                chatBox.scrollTop = chatBox.scrollHeight;
-            }
+        // --- Helper function to format chat responses (bolding) ---
+        function formatResponse(text) {
+            return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
         }
 
-        // Allow sending message with Enter key
-        document.getElementById("input-box").addEventListener("keypress", (e) => {
-            if (e.key === "Enter") sendMessage();
+        // --- Function to parse and display web links ---
+        function displayWebLinks(linksString) {
+            linksContainer.innerHTML = ''; // Clear previous links
+            if (!linksString || linksString.trim() === '') {
+                 linksContainer.innerHTML = '<p class="text-gray-400 text-sm">No web search was performed for this query.</p>';
+                 return;
+            }
+
+            const linkRegex = /- \[(.*?)\]\((.*?)\)/g;
+            let match;
+            let hasLinks = false;
+            while ((match = linkRegex.exec(linksString)) !== null) {
+                hasLinks = true;
+                const title = match[1];
+                const url = match[2];
+
+                const linkCard = document.createElement('a');
+                linkCard.href = url;
+                linkCard.target = '_blank';
+                linkCard.rel = 'noopener noreferrer';
+                linkCard.className = 'block p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors';
+                linkCard.innerHTML = `
+                    <p class="font-semibold text-purple-400 truncate">${title}</p>
+                    <p class="text-xs text-gray-400 truncate">${url}</p>
+                `;
+                linksContainer.appendChild(linkCard);
+            }
+             if (!hasLinks) {
+                linksContainer.innerHTML = '<p class="text-gray-400 text-sm">No web links found in the results.</p>';
+            }
+        }
+        
+        // --- Function to append a message to the chat window ---
+        function appendMessage(content, sender) {
+            const messageWrapper = document.createElement('div');
+            messageWrapper.classList.add('flex', sender === 'user' ? 'justify-end' : 'justify-start');
+
+            const messageBubble = document.createElement('div');
+            messageBubble.classList.add('max-w-lg', 'px-4', 'py-3', 'rounded-lg');
+            if (sender === 'user') {
+                messageBubble.classList.add('bg-blue-600', 'rounded-br-none');
+            } else {
+                messageBubble.classList.add('bg-gray-700', 'rounded-bl-none');
+            }
+            
+            messageBubble.innerHTML = `<div class="text-sm">${content}</div>`;
+            messageWrapper.appendChild(messageBubble);
+            chatWindow.querySelector('.space-y-6').appendChild(messageWrapper);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            return messageBubble;
+        }
+
+        // --- Handle form submission ---
+        chatForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const userQuery = messageInput.value.trim();
+            if (!userQuery) return;
+
+            appendMessage(userQuery, 'user');
+            messageInput.value = '';
+            sendButton.disabled = true;
+
+            // Clear previous results and show loading state in right panel
+            linksContainer.innerHTML = '<p class="text-gray-400 text-sm">Searching for relevant links...</p>';
+
+            const loadingBubble = appendMessage(
+                `<div class="flex items-center space-x-2">
+                    <div class="w-2 h-2 bg-purple-400 rounded-full animate-pulse" style="animation-delay: 0s;"></div>
+                    <div class="w-2 h-2 bg-purple-400 rounded-full animate-pulse" style="animation-delay: 0.2s;"></div>
+                    <div class="w-2 h-2 bg-purple-400 rounded-full animate-pulse" style="animation-delay: 0.4s;"></div>
+                </div>`, 'ai'
+            );
+
+            try {
+                const response = await fetch('/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: userQuery }),
+                });
+
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                const data = await response.json();
+
+                // Update chat bubble
+                const advisorResponse = data.advisor_response || "I'm sorry, I couldn't generate a response.";
+                loadingBubble.querySelector('div').innerHTML = formatResponse(advisorResponse);
+
+                // Update the web links panel on the right
+                // Your current backend integrates links into the advisor response context.
+                // To display them separately, we'll use the 'web_links' field.
+                displayWebLinks(data.web_links);
+                
+                if (data.manager_response && data.manager_response.error) {
+                    loadingBubble.querySelector('div').innerHTML = `<p class="text-red-400">Error: ${data.manager_response.error}</p>`;
+                }
+
+            } catch (error) {
+                console.error('Error fetching from /query:', error);
+                loadingBubble.querySelector('div').innerHTML = `<p class="text-red-400">An error occurred. Please check the console and try again.</p>`;
+                linksContainer.innerHTML = '<p class="text-red-400 text-sm">Could not fetch web results.</p>';
+            } finally {
+                sendButton.disabled = false;
+                messageInput.focus();
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+            }
         });
     </script>
+
 </body>
 </html>
